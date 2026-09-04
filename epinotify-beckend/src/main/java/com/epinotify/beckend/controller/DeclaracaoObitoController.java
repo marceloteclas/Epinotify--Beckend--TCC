@@ -7,28 +7,44 @@ import com.epinotify.beckend.model.Medico;
 import com.epinotify.beckend.model.StatusDeclaracao;
 
 import com.epinotify.beckend.service.DeclaracaoObitoService;
+import com.epinotify.beckend.service.ArquivoStorageService;
+import com.epinotify.beckend.service.OcrProcessamentoService;
+import com.epinotify.beckend.dto.ResultadoOcrResponse;
 
+import org.springframework.core.io.Resource;
+import org.springframework.http.ContentDisposition;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 
 import org.springframework.web.bind.annotation.*;
 
+import java.nio.charset.StandardCharsets;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
 @RestController
 @RequestMapping("/api/declaracoes")
-@CrossOrigin(origins = "http://localhost:5173")
+@CrossOrigin(originPatterns = {
+                "http://localhost:*",
+                "http://127.0.0.1:*"
+})
 public class DeclaracaoObitoController {
 
         private final DeclaracaoObitoService declaracaoService;
+        private final ArquivoStorageService arquivoStorageService;
+        private final OcrProcessamentoService ocrProcessamentoService;
 
         public DeclaracaoObitoController(
-                        DeclaracaoObitoService declaracaoService) {
+                        DeclaracaoObitoService declaracaoService,
+                        ArquivoStorageService arquivoStorageService,
+                        OcrProcessamentoService ocrProcessamentoService) {
 
                 this.declaracaoService = declaracaoService;
+                this.arquivoStorageService = arquivoStorageService;
+                this.ocrProcessamentoService = ocrProcessamentoService;
         }
 
         // =========================================================
@@ -48,6 +64,39 @@ public class DeclaracaoObitoController {
 
                 return ResponseEntity.ok(
                                 declaracaoService.buscarPorId(id));
+        }
+
+        @GetMapping("/{id}/arquivo")
+        public ResponseEntity<Resource> obterArquivoOriginal(
+                        @PathVariable Long id) {
+
+                DeclaracaoObito declaracao = declaracaoService.buscarPorId(id);
+                Resource arquivo = arquivoStorageService.carregar(
+                                declaracao.getCaminhoArquivoTemporario());
+
+                MediaType mediaType;
+
+                try {
+                        mediaType = declaracao.getTipoArquivo() == null
+                                        ? MediaType.APPLICATION_OCTET_STREAM
+                                        : MediaType.parseMediaType(declaracao.getTipoArquivo());
+                } catch (Exception exception) {
+                        mediaType = MediaType.APPLICATION_OCTET_STREAM;
+                }
+
+                String nomeArquivo = declaracao.getNomeArquivoOriginal() == null
+                                ? "declaracao-obito"
+                                : declaracao.getNomeArquivoOriginal();
+
+                String disposicao = ContentDisposition.inline()
+                                .filename(nomeArquivo, StandardCharsets.UTF_8)
+                                .build()
+                                .toString();
+
+                return ResponseEntity.ok()
+                                .contentType(mediaType)
+                                .header(HttpHeaders.CONTENT_DISPOSITION, disposicao)
+                                .body(arquivo);
         }
 
         @GetMapping("/status/{status}")
@@ -82,8 +131,33 @@ public class DeclaracaoObitoController {
                                                 arquivo,
                                                 usuarioId);
 
+                ocrProcessamentoService.processar(
+                                declaracao.getId());
+
                 return ResponseEntity
                                 .status(HttpStatus.CREATED)
+                                .body(declaracao);
+        }
+
+        @GetMapping("/{id}/ocr")
+        public ResponseEntity<ResultadoOcrResponse> obterResultadoOcr(
+                        @PathVariable Long id) {
+
+                return ResponseEntity.ok(
+                                ocrProcessamentoService.obterResultado(id));
+        }
+
+        @PostMapping("/{id}/ocr/reprocessar")
+        public ResponseEntity<DeclaracaoObito> reprocessarOcr(
+                        @PathVariable Long id) {
+
+                DeclaracaoObito declaracao = ocrProcessamentoService
+                                .prepararReprocessamento(id);
+
+                ocrProcessamentoService.processar(id);
+
+                return ResponseEntity
+                                .status(HttpStatus.ACCEPTED)
                                 .body(declaracao);
         }
 
@@ -114,6 +188,26 @@ public class DeclaracaoObitoController {
                                 declaracaoService.atualizarDados(
                                                 id,
                                                 declaracao));
+        }
+
+        @DeleteMapping("/{id}")
+        public ResponseEntity<Void> excluir(
+                        @PathVariable Long id) {
+
+                declaracaoService.excluir(id);
+
+                return ResponseEntity.noContent().build();
+        }
+
+        @PutMapping(value = "/{id}/arquivo", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+        public ResponseEntity<DeclaracaoObito> reanexarArquivoOriginal(
+                        @PathVariable Long id,
+                        @RequestParam("arquivo") MultipartFile arquivo) {
+
+                return ResponseEntity.ok(
+                                declaracaoService.reanexarArquivoOriginal(
+                                                id,
+                                                arquivo));
         }
 
         // =========================================================

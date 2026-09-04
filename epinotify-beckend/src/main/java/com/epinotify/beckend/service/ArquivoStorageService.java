@@ -1,6 +1,8 @@
 package com.epinotify.beckend.service;
 
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.io.FileSystemResource;
+import org.springframework.core.io.Resource;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -119,6 +121,30 @@ public class ArquivoStorageService {
                     "Não foi possível excluir o arquivo.",
                     exception);
         }
+    }
+
+    public Resource carregar(String caminho) {
+
+        if (caminho == null || caminho.isBlank()) {
+            throw new IllegalStateException(
+                    "A declaração não possui arquivo original.");
+        }
+
+        Path arquivo = Path.of(caminho)
+                .toAbsolutePath()
+                .normalize();
+
+        if (!arquivo.startsWith(diretorioUpload)) {
+            throw new IllegalStateException(
+                    "O arquivo informado não pertence ao diretório de uploads.");
+        }
+
+        if (!Files.isRegularFile(arquivo)) {
+            throw new IllegalStateException(
+                    "O arquivo original da declaração não foi encontrado.");
+        }
+
+        return new FileSystemResource(arquivo);
     }
 
     private void validarArquivo(

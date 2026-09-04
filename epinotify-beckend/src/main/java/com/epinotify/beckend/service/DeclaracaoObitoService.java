@@ -142,6 +142,47 @@ public class DeclaracaoObitoService {
                 }
         }
 
+        @Transactional
+        public DeclaracaoObito reanexarArquivoOriginal(
+                        Long id,
+                        MultipartFile arquivo) {
+
+                DeclaracaoObito declaracao = buscarPorId(id);
+
+                String novoCaminho = arquivoStorageService
+                                .salvarTemporariamente(arquivo);
+
+                try {
+
+                        declaracao.setNomeArquivoOriginal(
+                                        arquivoStorageService
+                                                        .obterNomeOriginalSeguro(arquivo));
+
+                        declaracao.setTipoArquivo(
+                                        arquivo.getContentType());
+
+                        declaracao.setCaminhoArquivoTemporario(
+                                        novoCaminho);
+
+                        return declaracaoRepository.save(declaracao);
+
+                } catch (RuntimeException exception) {
+
+                        try {
+
+                                arquivoStorageService.excluir(
+                                                novoCaminho);
+
+                        } catch (RuntimeException erroExclusao) {
+
+                                exception.addSuppressed(
+                                                erroExclusao);
+                        }
+
+                        throw exception;
+                }
+        }
+
         // =========================================================
         // ATUALIZAÇÃO DOS DADOS DA FICHA
         // =========================================================
@@ -245,8 +286,6 @@ public class DeclaracaoObitoService {
                                         "Somente declarações pendentes podem ser confirmadas.");
                 }
 
-                excluirArquivoOriginal(declaracao);
-
                 declaracao.setStatus(
                                 StatusDeclaracao.CONCLUIDO);
 
@@ -254,6 +293,28 @@ public class DeclaracaoObitoService {
                                 LocalDateTime.now());
 
                 return declaracaoRepository.save(declaracao);
+        }
+
+        // =========================================================
+        // EXCLUSÃO
+        // =========================================================
+
+        @Transactional
+        public void excluir(Long id) {
+
+                DeclaracaoObito declaracao = buscarPorId(id);
+
+                if (declaracao.getStatus() == StatusDeclaracao.EM_PROCESSAMENTO) {
+                        throw new IllegalStateException(
+                                        "Aguarde o término do processamento antes de excluir a declaração.");
+                }
+
+                String caminhoArquivo = declaracao.getCaminhoArquivoTemporario();
+
+                declaracaoRepository.delete(declaracao);
+                declaracaoRepository.flush();
+
+                arquivoStorageService.excluir(caminhoArquivo);
         }
 
         // =========================================================
@@ -333,20 +394,4 @@ public class DeclaracaoObitoService {
                 }
         }
 
-        private void excluirArquivoOriginal(
-                        DeclaracaoObito declaracao) {
-
-                String caminho = declaracao
-                                .getCaminhoArquivoTemporario();
-
-                if (caminho == null || caminho.isBlank()) {
-                        return;
-                }
-
-                arquivoStorageService.excluir(
-                                caminho);
-
-                declaracao.setCaminhoArquivoTemporario(
-                                null);
-        }
 }

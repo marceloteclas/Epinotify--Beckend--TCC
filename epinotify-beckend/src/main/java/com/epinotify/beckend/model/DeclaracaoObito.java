@@ -42,6 +42,20 @@ public class DeclaracaoObito {
     @Column(name = "caminho_arquivo_temporario", length = 500)
     private String caminhoArquivoTemporario;
 
+    // Resposta integral da API OCR. Ela permanece separada dos dados
+    // confirmados para preservar sugestões, confiança e rastreabilidade.
+    @JsonIgnore
+    @Lob
+    @Column(name = "resultado_ocr_json", columnDefinition = "TEXT")
+    private String resultadoOcrJson;
+
+    @JsonIgnore
+    @Column(name = "erro_processamento_ocr", length = 2000)
+    private String erroProcessamentoOcr;
+
+    @Column(name = "data_processamento_ocr")
+    private LocalDateTime dataProcessamentoOcr;
+
     // Bloco I
     @Embedded
     private Identificacao identificacao;
@@ -162,6 +176,30 @@ public class DeclaracaoObito {
 
     public void setCaminhoArquivoTemporario(String caminhoArquivoTemporario) {
         this.caminhoArquivoTemporario = caminhoArquivoTemporario;
+    }
+
+    public String getResultadoOcrJson() {
+        return resultadoOcrJson;
+    }
+
+    public void setResultadoOcrJson(String resultadoOcrJson) {
+        this.resultadoOcrJson = resultadoOcrJson;
+    }
+
+    public String getErroProcessamentoOcr() {
+        return erroProcessamentoOcr;
+    }
+
+    public void setErroProcessamentoOcr(String erroProcessamentoOcr) {
+        this.erroProcessamentoOcr = erroProcessamentoOcr;
+    }
+
+    public LocalDateTime getDataProcessamentoOcr() {
+        return dataProcessamentoOcr;
+    }
+
+    public void setDataProcessamentoOcr(LocalDateTime dataProcessamentoOcr) {
+        this.dataProcessamentoOcr = dataProcessamentoOcr;
     }
 
     public Identificacao getIdentificacao() {
